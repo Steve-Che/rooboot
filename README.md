@@ -38,6 +38,30 @@
 - 技师：`13800000003 / Passw0rd!`
 - 运营：`13800000004 / Passw0rd!`
 
+## 部署与 CI/CD
+
+- **GitHub 仓库**：https://github.com/Steve-Che/rooboot
+- **生产环境**：https://rooboot.vercel.app
+- **自动部署**：已连接 Vercel ↔ GitHub
+  - 推送到 `main` → 自动部署 Production
+  - 推送到其他分支 / 打开 PR → 自动创建 Preview 部署
+- **GitHub Actions**：`.github/workflows/ci.yml` 在 push/PR 时执行 lint、typecheck、build、prisma validate
+
+### Vercel 环境变量（Production / Preview）
+
+| 变量 | 说明 |
+|------|------|
+| `DATABASE_URL` | Neon PostgreSQL 连接串（pooler） |
+| `NEXTAUTH_SECRET` | NextAuth 会话密钥 |
+| `NEXTAUTH_URL` | 生产域名，如 `https://rooboot.vercel.app` |
+
+Neon 集成会自动写入 `DATABASE_URL` 等变量。首次接入生产库后执行：
+
+```bash
+DATABASE_URL="..." npx prisma migrate deploy
+DATABASE_URL="..." npm run prisma:seed
+```
+
 ## 关键文档
 - `docs/product/launch-scope.md`
 - `docs/product/mvp-prd.md`
