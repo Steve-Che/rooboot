@@ -1,0 +1,348 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum RoleType {
+  customer
+  store_owner
+  technician
+  operator
+}
+
+enum OrganizationType {
+  store
+  platform
+}
+
+enum QualificationStatus {
+  pending
+  approved
+  rejected
+}
+
+enum DeviceCategory {
+  home_cleaning
+  window_cleaning
+  delivery
+  commercial_cleaning
+}
+
+enum DeviceConditionLevel {
+  A
+  B
+  C
+  D
+}
+
+enum InspectionStatus {
+  pending
+  assigned
+  inspecting
+  reported
+  closed
+  cancelled
+}
+
+enum MaintenanceStatus {
+  quoted
+  confirmed
+  in_progress
+  completed
+  warranty
+}
+
+enum ListingStatus {
+  draft
+  published
+  negotiating
+  closed
+  removed
+}
+
+enum OfferStatus {
+  sent
+  accepted
+  rejected
+  expired
+}
+
+enum RiskLevel {
+  P1
+  P2
+  P3
+}
+
+model User {
+  id              String            @id @default(cuid())
+  phone           String            @unique
+  email           String?           @unique
+  name            String
+  city            String
+  passwordHash    String
+  defaultRole     RoleType          @default(customer)
+  memberships     Membership[]
+  devices         RobotDevice[]
+  inspectionOrders InspectionOrder[]
+  listings        Listing[]
+  offers          Offer[]
+  auditLogs       AuditLog[]
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+
+  @@index([city])
+}
+
+model Organization {
+  id                  String               @id @default(cuid())
+  name                String
+  type                OrganizationType
+  city                String
+  qualificationStatus QualificationStatus  @default(pending)
+  memberships         Membership[]
+  inspectionOrders    InspectionOrder[]
+  listings            Listing[]
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+
+  @@index([city, qualificationStatus])
+}
+
+model Membership {
+  id             String      @id @default(cuid())
+  userId         String
+  organizationId String
+  role           RoleType
+  user           User        @relation(fields: [userId], references: [id])
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+
+  @@unique([userId, organizationId, role])
+  @@index([organizationId, role])
+}
+
+model DeviceModel {
+  id         String       @id @default(cuid())
+  brand      String
+  modelName  String
+  category   DeviceCategory
+  devices    RobotDevice[]
+  createdAt  DateTime     @default(now())
+  updatedAt  DateTime     @updatedAt
+
+  @@unique([brand, modelName])
+  @@index([category])
+}
+
+model RobotDevice {
+  id               String                @id @default(cuid())
+  ownerUserId      String
+  deviceModelId    String
+  serialNumber     String                @unique
+  conditionLevel   DeviceConditionLevel  @default(B)
+  firmwareVersion  String
+  purchaseDate     DateTime?
+  ownerUser        User                  @relation(fields: [ownerUserId], references: [id])
+  deviceModel      DeviceModel           @relation(fields: [deviceModelId], references: [id])
+  ownershipHistory OwnershipHistory[]
+  inspectionOrders InspectionOrder[]
+  listings         Listing[]
+  riskEvents       RiskEvent[]
+  createdAt        DateTime              @default(now())
+  updatedAt        DateTime              @updatedAt
+
+  @@index([ownerUserId])
+  @@index([deviceModelId])
+}
+
+model OwnershipHistory {
+  id            String      @id @default(cuid())
+  robotDeviceId String
+  ownerName     String
+  startAt       DateTime
+  endAt         DateTime?
+  robotDevice   RobotDevice @relation(fields: [robotDeviceId], references: [id])
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  @@index([robotDeviceId, startAt])
+}
+
+model InspectionOrder {
+  id                 String           @id @default(cuid())
+  userId             String
+  robotDeviceId      String
+  organizationId     String
+  status             InspectionStatus @default(pending)
+  problemDescription String
+  appointmentAt      DateTime
+  user               User             @relation(fields: [userId], references: [id])
+  robotDevice        RobotDevice      @relation(fields: [robotDeviceId], references: [id])
+  organization       Organization     @relation(fields: [organizationId], references: [id])
+  inspectionReport   InspectionReport?
+  maintenanceOrders  MaintenanceOrder[]
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+
+  @@index([organizationId, status])
+  @@index([robotDeviceId, status])
+}
+
+model InspectionReport {
+  id               String          @id @default(cuid())
+  inspectionOrderId String         @unique
+  overallScore     Int
+  batteryHealth    Int
+  motorHealth      Int
+  sensorHealth     Int
+  navigationHealth Int
+  safetyRiskLevel  RiskLevel
+  suggestedActions String
+  mediaUrls        String[]
+  inspectionOrder  InspectionOrder @relation(fields: [inspectionOrderId], references: [id])
+  listings         Listing[]
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+}
+
+model MaintenanceOrder {
+  id                String            @id @default(cuid())
+  inspectionOrderId String
+  quoteAmount       Decimal           @db.Decimal(10, 2)
+  finalAmount       Decimal?          @db.Decimal(10, 2)
+  status            MaintenanceStatus @default(quoted)
+  warrantyDays      Int               @default(0)
+  inspectionOrder   InspectionOrder   @relation(fields: [inspectionOrderId], references: [id])
+  partItems         PartItem[]
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+
+  @@index([inspectionOrderId, status])
+}
+
+model PartItem {
+  id                 String           @id @default(cuid())
+  maintenanceOrderId String
+  partName           String
+  cost               Decimal          @db.Decimal(10, 2)
+  quantity           Int              @default(1)
+  maintenanceOrder   MaintenanceOrder @relation(fields: [maintenanceOrderId], references: [id])
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+
+  @@index([maintenanceOrderId])
+}
+
+model Listing {
+  id                  String        @id @default(cuid())
+  sellerUserId        String
+  organizationId      String?
+  robotDeviceId       String
+  inspectionReportId  String?
+  title               String
+  expectedPrice       Decimal       @db.Decimal(10, 2)
+  listingStatus       ListingStatus @default(draft)
+  hasInspectionReport Boolean       @default(false)
+  sellerUser          User          @relation(fields: [sellerUserId], references: [id])
+  organization        Organization? @relation(fields: [organizationId], references: [id])
+  robotDevice         RobotDevice   @relation(fields: [robotDeviceId], references: [id])
+  inspectionReport    InspectionReport? @relation(fields: [inspectionReportId], references: [id])
+  offers              Offer[]
+  disputes            DisputeCase[]
+  riskEvents          RiskEvent[]
+  createdAt           DateTime      @default(now())
+  updatedAt           DateTime      @updatedAt
+
+  @@index([sellerUserId, listingStatus])
+  @@index([organizationId, listingStatus])
+  @@index([inspectionReportId])
+}
+
+model Offer {
+  id         String      @id @default(cuid())
+  listingId  String
+  buyerUserId String
+  offerPrice Decimal     @db.Decimal(10, 2)
+  status     OfferStatus @default(sent)
+  message    String?
+  listing    Listing     @relation(fields: [listingId], references: [id])
+  buyerUser  User        @relation(fields: [buyerUserId], references: [id])
+  deal       Deal?
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
+
+  @@index([listingId, status])
+  @@index([buyerUserId, status])
+}
+
+model Deal {
+  id          String    @id @default(cuid())
+  offerId     String    @unique
+  finalAmount Decimal   @db.Decimal(10, 2)
+  dealAt      DateTime
+  offer       Offer     @relation(fields: [offerId], references: [id])
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
+
+model DisputeCase {
+  id          String    @id @default(cuid())
+  listingId   String
+  summary     String
+  resolved    Boolean   @default(false)
+  listing     Listing   @relation(fields: [listingId], references: [id])
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([listingId, resolved])
+}
+
+model PriceReference {
+  id            String    @id @default(cuid())
+  brand         String
+  modelName     String
+  city          String
+  medianPrice   Decimal   @db.Decimal(10, 2)
+  sampleSize    Int
+  calculatedAt  DateTime
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@unique([brand, modelName, city, calculatedAt])
+  @@index([brand, modelName, city])
+}
+
+model RiskEvent {
+  id           String     @id @default(cuid())
+  robotDeviceId String?
+  listingId    String?
+  riskType     String
+  riskLevel    RiskLevel
+  description  String
+  robotDevice  RobotDevice? @relation(fields: [robotDeviceId], references: [id])
+  listing      Listing?   @relation(fields: [listingId], references: [id])
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  @@index([robotDeviceId, riskLevel])
+  @@index([listingId, riskLevel])
+}
+
+model AuditLog {
+  id          String   @id @default(cuid())
+  actorUserId String
+  action      String
+  targetType  String
+  targetId    String
+  metadata    Json
+  actorUser   User     @relation(fields: [actorUserId], references: [id])
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([actorUserId, createdAt])
+  @@index([targetType, targetId])
+}
